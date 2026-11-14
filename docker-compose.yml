@@ -1,0 +1,54 @@
+version: '3.9'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: chronos_redis
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - '6379:6379'
+    networks:
+      - chronos_net
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: chronos_api
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - PORT=5000
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    ports:
+      - '5000:5000'
+    networks:
+      - chronos_net
+
+  web:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: chronos_web
+    restart: always
+    depends_on:
+      - api
+    ports:
+      - '80:80'
+      - '443:443'
+    networks:
+      - chronos_net
+
+volumes:
+  redis_data:
+
+networks:
+  chronos_net:
+    driver: bridge
+
