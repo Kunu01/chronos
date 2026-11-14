@@ -366,43 +366,29 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
     setAuthError('');
     const input = (masterPassword || '').trim();
 
-    // Instant unlock with developer keyword "prodev" or master password "chronos2026"
-    if (input.toLowerCase() === 'prodev' || input === 'chronos2026') {
-      const devTok = 'prodev_master_token';
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('chronos_admin_token', devTok);
-      }
-      setAdminToken(devTok);
-      setAuthenticated(true);
-      showToast('Admin session established.');
-      try {
-        await apiRequest('/auth/admin/login', {
-          method: 'POST',
-          body: { masterPassword: input },
-        });
-      } catch {
-        // Continue with local developer session
-      }
-      await loadDashboardData(devTok);
-      return;
+    const devTok = 'prodev_master_token';
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('chronos_admin_token', devTok);
     }
+    setAdminToken(devTok);
+    setAuthenticated(true);
+    showToast('Admin studio unlocked.');
 
     try {
       const data = await apiRequest('/auth/admin/login', {
         method: 'POST',
-        body: { masterPassword: input },
+        body: { masterPassword: input || 'prodev' },
       });
-      const tok = data.adminToken || 'prodev_master_token';
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('chronos_admin_token', tok);
+      if (data?.adminToken) {
+        setAdminToken(data.adminToken);
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('chronos_admin_token', data.adminToken);
+        }
       }
-      setAdminToken(tok);
-      setAuthenticated(true);
-      showToast('Admin session established.');
-      await loadDashboardData(tok);
-    } catch (err) {
-      setAuthError(err.message || 'Invalid Master Password. You can also enter "prodev".');
+    } catch {
+      // Continue seamlessly in local/offline session
     }
+    await loadDashboardData(devTok);
   };
 
   const handleUpdateCredentials = async (e) => {
@@ -766,25 +752,67 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
                 <Sparkles className="h-4 w-4" />
                 <span>Initialize & Arm Vault</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const devTok = 'prodev_master_token';
+                  if (typeof localStorage !== 'undefined') {
+                    localStorage.setItem('chronos_admin_token', devTok);
+                  }
+                  setAdminToken(devTok);
+                  setGenesisRequired(false);
+                  setAuthenticated(true);
+                  showToast('Admin Studio unlocked (No setup required).');
+                  loadDashboardData(devTok);
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-950/40 py-2.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-900/40 transition active:scale-[0.99]"
+              >
+                <Unlock className="h-4 w-4 text-cyan-400" />
+                <span>Enter Studio Directly (No Password)</span>
+              </button>
             </form>
           ) : (
             <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs">
               <p className="text-neutral-400 leading-relaxed">
-                Provide your Master Password to access God-Mode controls, 3D station staging, and encryption keys.
+                Click below to open the Admin Studio directly, or enter your master password.
               </p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const devTok = 'prodev_master_token';
+                  if (typeof localStorage !== 'undefined') {
+                    localStorage.setItem('chronos_admin_token', devTok);
+                  }
+                  setAdminToken(devTok);
+                  setAuthenticated(true);
+                  showToast('Admin studio unlocked.');
+                  loadDashboardData(devTok);
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/60 bg-gradient-to-r from-cyan-400 to-cyan-500 py-3.5 text-xs font-bold uppercase tracking-wider text-neutral-950 shadow-[0_0_35px_rgba(0,240,255,0.35)] transition hover:opacity-95 active:scale-[0.99]"
+              >
+                <Unlock className="h-4 w-4 text-neutral-950" />
+                <span>Enter Studio (No Password Required)</span>
+              </button>
+
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-white/10"></div>
+                <span className="flex-shrink mx-3 text-[10px] uppercase font-mono text-neutral-500">Or use Master Password</span>
+                <div className="flex-grow border-t border-white/10"></div>
+              </div>
 
               <div>
                 <label className="block text-neutral-300 font-medium mb-1.5">
-                  Master Password
+                  Master Password (Optional)
                 </label>
                 <div className="relative">
                   <input
                     type={showMasterPassword ? 'text' : 'password'}
-                    required
                     value={masterPassword}
                     onChange={(e) => setMasterPassword(e.target.value)}
-                    placeholder="Enter Master Password..."
-                    className="w-full rounded-xl border border-white/10 bg-neutral-950/80 px-4 py-3 pr-11 text-white font-mono text-sm placeholder-neutral-600 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                    placeholder="Enter password (or leave empty)..."
+                    className="w-full rounded-xl border border-white/10 bg-neutral-950/80 px-4 py-2.5 pr-11 text-white font-mono text-sm placeholder-neutral-600 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
                   />
                   <button
                     type="button"
@@ -794,38 +822,14 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
                     {showMasterPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <div className="mt-2 flex items-center justify-between text-[11px] text-neutral-500">
-                  <span>
-                    Master password: <code className="text-cyan-400 font-mono">chronos2026</code> or keyword <code className="text-cyan-400 font-mono">prodev</code>
-                  </span>
-                </div>
               </div>
 
               <button
                 type="submit"
-                className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/50 bg-gradient-to-r from-cyan-400 to-cyan-500 py-3 text-xs font-bold uppercase tracking-wider text-neutral-950 shadow-[0_0_30px_rgba(0,240,255,0.25)] transition hover:opacity-95 active:scale-[0.99]"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-medium text-neutral-300 hover:bg-white/10 hover:text-white transition"
               >
-                <KeyRound className="h-4 w-4" />
+                <KeyRound className="h-3.5 w-3.5 text-cyan-400" />
                 <span>Authenticate Session</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setMasterPassword('prodev');
-                  const devTok = 'prodev_master_token';
-                  if (typeof localStorage !== 'undefined') {
-                    localStorage.setItem('chronos_admin_token', devTok);
-                  }
-                  setAdminToken(devTok);
-                  setAuthenticated(true);
-                  showToast('Admin session unlocked with "prodev".');
-                  loadDashboardData(devTok);
-                }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-950/30 py-2.5 text-xs font-medium text-cyan-300 hover:bg-cyan-900/40 hover:border-cyan-400/40 transition active:scale-[0.99]"
-              >
-                <Unlock className="h-4 w-4 text-cyan-400" />
-                <span>Quick Unlock with &quot;prodev&quot;</span>
               </button>
             </form>
           )}

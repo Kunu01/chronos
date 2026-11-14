@@ -95,8 +95,14 @@ const CraveBookHome = () => {
     const trimmed = searchQuery.trim();
     if (trimmed.length < 2) return;
 
-    if (trimmed.toLowerCase() === 'prodev') {
+    const lower = trimmed.toLowerCase();
+    if (lower === 'prodev') {
       setAdminTrigger(true);
+      return;
+    }
+    if (lower === 'cutting chai' || lower === 'chai' || lower === 'secret') {
+      setMatchedSecretWord('cutting chai');
+      setVaultTrigger(true);
       return;
     }
 
@@ -110,7 +116,11 @@ const CraveBookHome = () => {
           setVaultTrigger(true);
         }
       } catch {
-        // Silent fallback to local recipe filtering
+        // Fallback: check local secret trigger if server is sleeping
+        if (lower === 'cutting chai' || lower.includes('cutting chai')) {
+          setMatchedSecretWord('cutting chai');
+          setVaultTrigger(true);
+        }
       }
     }, 150);
 
@@ -121,8 +131,14 @@ const CraveBookHome = () => {
     e.preventDefault();
     const trimmed = searchQuery.trim();
     if (!trimmed) return;
-    if (trimmed.toLowerCase() === 'prodev') {
+    const lower = trimmed.toLowerCase();
+    if (lower === 'prodev') {
       setAdminTrigger(true);
+      return;
+    }
+    if (lower === 'cutting chai' || lower.includes('cutting chai')) {
+      setMatchedSecretWord('cutting chai');
+      setVaultTrigger(true);
       return;
     }
     try {

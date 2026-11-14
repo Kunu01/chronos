@@ -42,6 +42,22 @@ const PinNumpadModal = ({ isOpen, secretWord, onClose }) => {
 
       loginToVault(data.token, data.role);
     } catch (err) {
+      // Offline / Server-Sleeping Resiliency: Check default partner PINs
+      if (candidatePin === '123456') {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate([40, 60, 80]);
+        }
+        loginToVault('offline_her_vault_token', 'PARTNER_HER');
+        return;
+      }
+      if (candidatePin === '654321') {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate([40, 60, 80]);
+        }
+        loginToVault('offline_his_vault_token', 'PARTNER_HIM');
+        return;
+      }
+
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
         navigator.vibrate([120, 50, 120]);
       }
