@@ -4,6 +4,7 @@ import {
   getTimelineStations,
   restoreStationsBulk,
   recordActivity,
+  purgeAllStations,
 } from '../services/dataStore.js';
 import { adminAuthMiddleware } from '../middlewares/authMiddleware.js';
 import { standardApiLimiter } from '../middlewares/rateLimiter.js';
@@ -70,6 +71,26 @@ router.post('/restore', standardApiLimiter, adminAuthMiddleware, async (req, res
     return sendSuccess(res, {
       message: `Successfully restored ${restored.length} stations.`,
       stations: restored,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/v1/admin/purge-stations
+ * Purges all stations for a clean slate.
+ */
+router.post('/purge-stations', standardApiLimiter, adminAuthMiddleware, async (req, res, next) => {
+  try {
+    const empty = await purgeAllStations();
+    const io = req.app.get('io');
+    if (io) {
+      io.to('chronos_vault').emit('timeline:updated', { purged: true });
+    }
+    return sendSuccess(res, {
+      message: 'All stations purged. Clean slate initialized.',
+      stations: empty,
     });
   } catch (err) {
     next(err);

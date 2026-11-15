@@ -5,6 +5,7 @@ import AppConfig from '../models/AppConfig.js';
 import MemoryStation from '../models/MemoryStation.js';
 import ChatMessage from '../models/ChatMessage.js';
 import ActivityLog from '../models/ActivityLog.js';
+import MusicTrack from '../models/MusicTrack.js';
 import { deleteCloudinaryAssets } from './cloudinaryService.js';
 
 let mongoConnected = false;
@@ -1008,118 +1009,15 @@ export const DECOY_RECIPES = [
   },
 ];
 
-let fallbackStations = [
-  {
-    _id: 'station_0',
-    trackOrder: 0,
-    stationTitle: 'Day 1 — Cutting Chai & Rain',
-    milestoneDate: '2024-11-20T18:30:00.000Z',
-    environmentTheme: 'autumn-night',
-    secretLetter:
-      'Two years ago at that tiny corner stall, the rain refused to stop and neither did our conversation. That was the exact second the clock started.',
-    assets: [
-      {
-        type: 'photo',
-        url: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=800&q=80',
-        caption: 'Two glasses of cutting chai before the storm hit.',
-        displayType: 'billboard',
-      },
-    ],
-  },
-  {
-    _id: 'station_1',
-    trackOrder: 1,
-    stationTitle: '3 AM Hostel Roof Calls',
-    milestoneDate: '2025-02-14T22:15:00.000Z',
-    environmentTheme: 'rainy-neon',
-    secretLetter:
-      'Whispering into earphones at 3 AM so your roommate would not wake up, watching the same movie on a 3-2-1 countdown.',
-    assets: [
-      {
-        type: 'photo',
-        url: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=800&q=80',
-        caption: 'You fell asleep on call with the city lights glowing.',
-        displayType: 'billboard',
-      },
-    ],
-  },
-  {
-    _id: 'station_2',
-    trackOrder: 2,
-    stationTitle: 'Golden Hour Platform 4',
-    milestoneDate: '2025-07-08T17:45:00.000Z',
-    environmentTheme: 'sunset',
-    secretLetter:
-      'Every train departure felt too fast, every arrival took forever. Kept the crumpled ticket stub in my wallet ever since.',
-    assets: [
-      {
-        type: 'photo',
-        url: 'https://images.unsplash.com/photo-1474487548417-781cb71495f3?auto=format&fit=crop&w=800&q=80',
-        caption: 'Counting down the stations until the next visit.',
-        displayType: 'billboard',
-      },
-    ],
-  },
-  {
-    _id: 'station_3',
-    trackOrder: 3,
-    stationTitle: 'Year One — Starlight Coupe',
-    milestoneDate: '2025-11-20T00:00:00.000Z',
-    environmentTheme: 'stars',
-    secretLetter:
-      '365 days across two cities, two phones, and a thousand voice notes. Still my favorite person in every timezone.',
-    assets: [
-      {
-        type: 'photo',
-        url: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=800&q=80',
-        caption: 'Under the same sky, 800 kilometers apart.',
-        displayType: 'billboard',
-      },
-    ],
-  },
-  {
-    _id: 'station_4',
-    trackOrder: 4,
-    stationTitle: 'The 2-Year Express',
-    milestoneDate: '2026-11-12T00:00:00.000Z',
-    environmentTheme: 'midnight',
-    secretLetter:
-      'Built this entire private universe just for the two of us. Here is to every station still ahead on the track.',
-    assets: [
-      {
-        type: 'photo',
-        url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
-        caption: 'Welcome aboard Project Chronos v3.0.',
-        displayType: 'billboard',
-      },
-    ],
-  },
-];
+let fallbackStations = [];
 
-let fallbackMessages = [
-  {
-    _id: 'msg_seed_1',
-    senderRole: 'PARTNER_HIM',
-    type: 'text',
-    content: 'Vault online. All systems nominal. Double-tap the Dynamic Island if anyone walks in.',
-    cloudinaryPublicId: null,
-    createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-  },
-  {
-    _id: 'msg_seed_2',
-    senderRole: 'PARTNER_HER',
-    type: 'text',
-    content: 'The 3D train looks incredible! Ready for Air Hockey or Sync or Swim?',
-    cloudinaryPublicId: null,
-    createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
-  },
-];
+let fallbackMessages = [];
 
 let fallbackLogs = [
   {
     _id: 'log_seed_1',
     actor: 'SYSTEM',
-    action: 'Chronos v3.0.0 Vault Engine initialized (24h TTL & Redis Cache active)',
+    action: 'Chronos v3.0.0 Vault Engine initialized (Ready for custom milestone staging)',
     timestamp: new Date().toISOString(),
   },
 ];
@@ -1564,3 +1462,103 @@ export const getSystemHealth = () => ({
   cacheEngine: redisConnected ? 'Redis 7 AOF' : 'In-Memory Sub-1ms Cache',
   dbEngine: mongoConnected ? 'MongoDB Atlas M0' : 'In-Memory Vault Store',
 });
+
+// --- Station Purge / Clean Slate ---
+export const purgeAllStations = async () => {
+  if (mongoConnected) {
+    await MemoryStation.deleteMany({});
+  }
+  fallbackStations = [];
+  await cacheDel('timeline');
+  await recordActivity('ADMIN', 'Purged all milestone stations — Clean Slate initialized');
+  return [];
+};
+
+// --- Background Music Playlist Store ---
+let fallbackTracks = [
+  {
+    _id: 'default_ambient_track_1',
+    title: 'Warm Memories (Piano Ambient)',
+    artist: 'Project Chronos Soft Tune',
+    url: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3',
+    publicId: null,
+    order: 0,
+    createdAt: new Date().toISOString(),
+  },
+];
+
+export const getPlaylistTracks = async () => {
+  const cached = await cacheGet('playlist_tracks');
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch {
+      // continue
+    }
+  }
+  if (mongoConnected) {
+    const tracks = await MusicTrack.find().sort({ order: 1, createdAt: 1 }).lean();
+    if (tracks.length > 0) {
+      await cacheSet('playlist_tracks', JSON.stringify(tracks), 3600);
+      return tracks;
+    }
+  }
+  return fallbackTracks;
+};
+
+export const addPlaylistTrack = async ({ title, artist, url, publicId }) => {
+  const current = await getPlaylistTracks();
+  const nextOrder = current.length;
+
+  if (mongoConnected) {
+    const doc = await MusicTrack.create({
+      title: title.trim(),
+      artist: (artist || 'Ambient Soundscape').trim(),
+      url,
+      publicId: publicId || null,
+      order: nextOrder,
+      createdAt: new Date(),
+    });
+    const item = doc.toObject();
+    await cacheDel('playlist_tracks');
+    await recordActivity('ADMIN', `Added background music track: "${item.title}"`);
+    return item;
+  } else {
+    const track = {
+      _id: `track_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      title: title.trim(),
+      artist: (artist || 'Ambient Soundscape').trim(),
+      url,
+      publicId: publicId || null,
+      order: nextOrder,
+      createdAt: new Date().toISOString(),
+    };
+    fallbackTracks.push(track);
+    await cacheDel('playlist_tracks');
+    await recordActivity('ADMIN', `Added background music track: "${track.title}" (RAM)`);
+    return track;
+  }
+};
+
+export const deletePlaylistTrack = async (id) => {
+  if (mongoConnected) {
+    const doc = await MusicTrack.findById(id);
+    if (doc) {
+      if (doc.publicId) {
+        await deleteCloudinaryAssets([doc.publicId]).catch(() => {});
+      }
+      await MusicTrack.findByIdAndDelete(id);
+      await cacheDel('playlist_tracks');
+      await recordActivity('ADMIN', `Removed background music track: "${doc.title}"`);
+      return true;
+    }
+  }
+  const idx = fallbackTracks.findIndex((t) => t._id === id);
+  if (idx !== -1) {
+    const [removed] = fallbackTracks.splice(idx, 1);
+    await cacheDel('playlist_tracks');
+    await recordActivity('ADMIN', `Removed background music track: "${removed.title}" (RAM)`);
+    return true;
+  }
+  return false;
+};

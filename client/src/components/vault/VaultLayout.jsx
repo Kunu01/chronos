@@ -13,6 +13,7 @@ import TrainTimelineCanvas from '../3d-train/TrainTimelineCanvas';
 import EphemeralChat from '../chat/EphemeralChat';
 import CoWatchCinema from '../cinema/CoWatchCinema';
 import ArcadeRoom from '../arcade/ArcadeRoom';
+import VaultMusicPlayer from './VaultMusicPlayer';
 
 const VaultLayout = () => {
   const { role, savepointMeta, updateSavepointState } = useAuth();
@@ -286,6 +287,9 @@ const VaultLayout = () => {
           onOpenFullScreen={() => handleChangeTab('call')}
         />
       )}
+
+      {/* Central Ambient Music System */}
+      <VaultMusicPlayer />
 
       <FloatingGlassDock
         activeTab={activeTab}

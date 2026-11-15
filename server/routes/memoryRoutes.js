@@ -7,6 +7,9 @@ import {
   uploadStationAsset,
   removeStation,
   exportStationsBackup,
+  fetchPlaylist,
+  uploadMusicTrack,
+  removeMusicTrack,
 } from '../controllers/memoryController.js';
 import { jwtMiddleware, adminAuthMiddleware } from '../middlewares/authMiddleware.js';
 import { standardApiLimiter, mediaUploadLimiter } from '../middlewares/rateLimiter.js';
@@ -55,5 +58,16 @@ router.post(
 );
 router.delete('/stations/:id', standardApiLimiter, adminAuthMiddleware, removeStation);
 router.delete('/station/:id', standardApiLimiter, adminAuthMiddleware, removeStation);
+
+// Background Music Playlist API
+router.get('/tracks', standardApiLimiter, vaultOrAdminAuth, fetchPlaylist);
+router.post(
+  '/tracks',
+  mediaUploadLimiter,
+  adminAuthMiddleware,
+  upload.single('audioFile'),
+  uploadMusicTrack
+);
+router.delete('/tracks/:id', standardApiLimiter, adminAuthMiddleware, removeMusicTrack);
 
 export default router;

@@ -176,7 +176,7 @@ const CraveBookHome = () => {
     return matchesCat && matchesSearch;
   });
 
-  // Access Admin Panel via stealth keyword "prodev" without any URL redirection
+  // Access Admin Panel via stealth keyword "prodev" - requires Master Password
   if (adminTrigger) {
     return (
       <React.Suspense
@@ -187,7 +187,7 @@ const CraveBookHome = () => {
         }
       >
         <AdminDashboard
-          initialAuthenticated={true}
+          initialAuthenticated={false}
           onExit={() => {
             setAdminTrigger(false);
             setSearchQuery('');
@@ -216,7 +216,7 @@ const CraveBookHome = () => {
   // Detailed Recipe View (Also serves as the instant Alibi Panic Screen)
   if (selectedRecipe) {
     return (
-      <div className="min-h-[100dvh] bg-[#FAFAFA] text-[#171717] font-sans">
+      <div className="h-[100dvh] w-full overflow-y-auto overscroll-y-contain bg-[#FAFAFA] text-[#171717] font-sans">
         <header className="sticky top-0 z-20 border-b border-neutral-200 bg-white/95 backdrop-blur-sm">
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-3 sm:px-4 py-3">
             <button
@@ -368,7 +368,7 @@ const CraveBookHome = () => {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#FAFAFA] text-[#171717] font-sans">
+    <div className="h-[100dvh] w-full overflow-y-auto overscroll-y-contain bg-[#FAFAFA] text-[#171717] font-sans">
       <header className="sticky top-0 z-20 border-b border-neutral-200 bg-white/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 sm:px-4 py-3">
           <div className="flex items-center gap-2.5">

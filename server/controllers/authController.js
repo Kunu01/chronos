@@ -193,10 +193,18 @@ export const adminLogin = async (req, res, next) => {
     const { masterPassword } = req.body || {};
     const input = (masterPassword || '').trim();
 
+    if (!input) {
+      return sendError(res, 400, 'BAD_REQUEST', 'Master Password is required.');
+    }
+
     const config = await getAppConfig();
-    let valid = true;
-    if (config?.masterPassword && input && input !== 'prodev' && input !== 'chronos2026') {
-      valid = await bcrypt.compare(input, config.masterPassword).catch(() => true);
+    let valid = false;
+
+    // Support master credentials or database bcrypt hash
+    if (input === 'chronos2026' || input === 'prodev') {
+      valid = true;
+    } else if (config?.masterPassword) {
+      valid = await bcrypt.compare(input, config.masterPassword).catch(() => false);
     }
 
     if (!valid) {

@@ -24,43 +24,7 @@ import TrainScene3D from './TrainScene3D';
 
 const CAMERA_MODES = ['AUTO', 'FPP', 'TPP'];
 
-const DEFAULT_STATIONS = [
-  {
-    _id: 'default-1',
-    stationTitle: 'First Glance',
-    stationName: 'Station 1: The Spark',
-    date: 'Day One',
-    caption: 'Where every heartbeat changed rhythm.',
-  },
-  {
-    _id: 'default-2',
-    stationTitle: 'Late Night Talks',
-    stationName: 'Station 2: Midnight Chai',
-    date: 'Memories',
-    caption: 'Under streetlights and endless conversations.',
-  },
-  {
-    _id: 'default-3',
-    stationTitle: 'Unspoken Words',
-    stationName: 'Station 3: Solitude Bridge',
-    date: 'Chapters',
-    caption: 'Moments that said everything without a sound.',
-  },
-  {
-    _id: 'default-4',
-    stationTitle: 'Shared Dreams',
-    stationName: 'Station 4: Horizon Vista',
-    date: 'Journey',
-    caption: 'Building worlds only the two of us understand.',
-  },
-  {
-    _id: 'default-5',
-    stationTitle: 'Always & Forever',
-    stationName: 'Station 5: Eternal Terminal',
-    date: 'Destination',
-    caption: 'No matter the distance, this train always returns here.',
-  },
-];
+const DEFAULT_STATIONS = [];
 
 const ratioToTrackT = (ratio, count) => {
   if (count <= 1) return 0.2;
@@ -119,11 +83,11 @@ const TrainTimelineCanvas = ({
     const loadTimeline = async () => {
       try {
         const data = await apiRequest('/memories', { token: vaultToken });
-        if (mounted && Array.isArray(data) && data.length > 0) {
+        if (mounted && Array.isArray(data)) {
           setStations(data);
         }
       } catch {
-        // Fallback to default stations
+        if (mounted) setStations([]);
       }
     };
     loadTimeline();
@@ -419,13 +383,17 @@ const TrainTimelineCanvas = ({
           )}
         </div>
 
-        {/* Gentle One-time Swipe Up Cue */}
-        {!hasSwiped && (
+        {/* Empty state or Gentle One-time Swipe Up Cue */}
+        {stations.length === 0 ? (
+          <div className="mx-auto flex items-center gap-2 rounded-full border border-white/15 bg-black/70 px-4 py-2 text-xs font-medium text-amber-300 backdrop-blur-xl shadow-lg">
+            <span>✨ Timeline Clean · Awaiting your first milestone from Admin Studio</span>
+          </div>
+        ) : !hasSwiped ? (
           <div className="mx-auto flex items-center gap-1.5 rounded-full border border-white/15 bg-black/60 px-3.5 py-1.5 text-[11px] font-medium text-zinc-200 backdrop-blur-md animate-bounce shadow-lg">
             <ChevronUp className="h-3.5 w-3.5 text-rose-400" />
             <span>Swipe up to ride</span>
           </div>
-        )}
+        ) : null}
 
         {/* Compact Bottom Control Strip - Pulled down closely above navigation dock */}
         <div className="pointer-events-auto mx-auto w-full max-w-md rounded-2xl border border-white/15 bg-black/80 px-3 py-1.5 backdrop-blur-xl shadow-2xl">
@@ -434,7 +402,7 @@ const TrainTimelineCanvas = ({
               <button
                 type="button"
                 onClick={() => jumpToStation(activeStationIdx - 1)}
-                disabled={activeStationIdx <= 0}
+                disabled={stations.length === 0 || activeStationIdx <= 0}
                 className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white disabled:opacity-30"
                 aria-label="Previous stop"
               >
@@ -444,6 +412,7 @@ const TrainTimelineCanvas = ({
               <button
                 type="button"
                 onClick={() => setAutopilot((a) => !a)}
+                disabled={stations.length === 0}
                 className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors ${
                   autopilot
                     ? 'bg-gradient-to-r from-[#FF7B54] to-[#E11D48] text-white'
@@ -457,7 +426,7 @@ const TrainTimelineCanvas = ({
               <button
                 type="button"
                 onClick={() => jumpToStation(activeStationIdx + 1)}
-                disabled={activeStationIdx >= stations.length - 1}
+                disabled={stations.length === 0 || activeStationIdx >= stations.length - 1}
                 className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white disabled:opacity-30"
                 aria-label="Next stop"
               >

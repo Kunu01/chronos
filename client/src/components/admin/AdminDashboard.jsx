@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield,
@@ -40,6 +40,8 @@ import {
   ChevronRight,
   Maximize2,
   Radio,
+  Play,
+  Pause,
 } from 'lucide-react';
 import { apiRequest, optimizeCloudinaryUrl } from '../../utils/apiClient';
 
@@ -86,103 +88,18 @@ const ENVIRONMENT_THEMES = [
   },
 ];
 
-const DEFAULT_SEED_STATIONS = [
-  {
-    _id: 'seed_st_0',
-    trackOrder: 0,
-    stationTitle: 'Day 1 — Cutting Chai & Rain',
-    milestoneDate: '2024-11-20',
-    environmentTheme: 'autumn-night',
-    secretLetter:
-      'Two years ago at that tiny corner stall, the rain refused to stop and neither did our conversation. That was the exact second the clock started.',
-    assets: [
-      {
-        url: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?auto=format&fit=crop&w=800&q=80',
-        caption: 'First walk under the autumn rain with a cutting chai.',
-        displayType: 'billboard',
-      },
-    ],
-  },
-  {
-    _id: 'seed_st_1',
-    trackOrder: 1,
-    stationTitle: '3 AM Hostel Roof Calls',
-    milestoneDate: '2025-02-14',
-    environmentTheme: 'rainy-neon',
-    secretLetter:
-      'Whispering into earphones at 3 AM so your roommate would not wake up, watching the same movie on a 3-2-1 countdown.',
-    assets: [
-      {
-        url: 'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?auto=format&fit=crop&w=800&q=80',
-        caption: 'Neon city lights reflected on wet asphalt at midnight.',
-        displayType: 'billboard',
-      },
-    ],
-  },
-  {
-    _id: 'seed_st_2',
-    trackOrder: 2,
-    stationTitle: 'Golden Hour Platform 4',
-    milestoneDate: '2025-07-08',
-    environmentTheme: 'sunset',
-    secretLetter:
-      'Every train departure felt too fast, every arrival took forever. Kept the crumpled ticket stub in my wallet ever since.',
-    assets: [
-      {
-        url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
-        caption: 'Golden hour sunset over platform 4.',
-        displayType: 'billboard',
-      },
-    ],
-  },
-  {
-    _id: 'seed_st_3',
-    trackOrder: 3,
-    stationTitle: 'Year One — Starlight Coupe',
-    milestoneDate: '2025-11-20',
-    environmentTheme: 'stars',
-    secretLetter:
-      '365 days across two cities, two phones, and a thousand voice notes. Still my favorite person in every timezone.',
-    assets: [
-      {
-        url: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=800&q=80',
-        caption: 'Midnight starlight over the snow peaks.',
-        displayType: 'billboard',
-      },
-    ],
-  },
-  {
-    _id: 'seed_st_4',
-    trackOrder: 4,
-    stationTitle: 'The 2-Year Express',
-    milestoneDate: '2026-11-12',
-    environmentTheme: 'midnight',
-    secretLetter:
-      'Built this entire private universe just for the two of us. Here is to every station still ahead on the track.',
-    assets: [
-      {
-        url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=800&q=80',
-        caption: 'City skyline glowing in the deep velvet night.',
-        displayType: 'billboard',
-      },
-    ],
-  },
-];
+const DEFAULT_SEED_STATIONS = [];
 
 const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
   const [loading, setLoading] = useState(!initialAuthenticated);
   const [genesisRequired, setGenesisRequired] = useState(false);
   const [authenticated, setAuthenticated] = useState(() => {
     if (initialAuthenticated) return true;
-    return typeof localStorage !== 'undefined'
-      ? Boolean(localStorage.getItem('chronos_admin_token'))
-      : false;
+    return false;
   });
   const [adminToken, setAdminToken] = useState(() => {
     if (initialAuthenticated) return 'prodev_master_token';
-    return typeof localStorage !== 'undefined'
-      ? localStorage.getItem('chronos_admin_token') || ''
-      : '';
+    return '';
   });
 
   // Active Main Navigation Tab
@@ -238,6 +155,19 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
   const [modalPolaroidFlipped, setModalPolaroidFlipped] = useState(false);
   const [showResetGenesisModal, setShowResetGenesisModal] = useState(false);
 
+  // Background Music & Purge All State
+  const [musicTracks, setMusicTracks] = useState([]);
+  const [musicLoading, setMusicLoading] = useState(false);
+  const [newTrackTitle, setNewTrackTitle] = useState('');
+  const [newTrackArtist, setNewTrackArtist] = useState('');
+  const [newTrackFile, setNewTrackFile] = useState(null);
+  const [newTrackUrl, setNewTrackUrl] = useState('');
+  const [isUploadingMusic, setIsUploadingMusic] = useState(false);
+  const [playingTrackId, setPlayingTrackId] = useState(null);
+  const audioPreviewRef = useRef(null);
+  const [showPurgeModal, setShowPurgeModal] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
+
   const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
   }, []);
@@ -259,6 +189,24 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
     setMediaLocalPreview(null);
   }, [mediaFile]);
 
+  const loadMusicTracks = useCallback(
+    async (tokenOverride) => {
+      const tok = tokenOverride ?? adminToken;
+      try {
+        setMusicLoading(true);
+        const res = await apiRequest('/memories/tracks', { adminToken: tok });
+        if (Array.isArray(res)) {
+          setMusicTracks(res);
+        }
+      } catch {
+        // Continue seamlessly
+      } finally {
+        setMusicLoading(false);
+      }
+    },
+    [adminToken]
+  );
+
   const loadDashboardData = useCallback(
     async (tokenOverride) => {
       const tok = tokenOverride ?? adminToken;
@@ -275,17 +223,27 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
         if (Array.isArray(watcherLogs) && watcherLogs.length > 0) {
           setLogs(watcherLogs);
         }
-        if (Array.isArray(st) && st.length > 0) {
+        if (Array.isArray(st)) {
           setStations(st);
         } else {
-          setStations((prev) => (prev.length > 0 ? prev : DEFAULT_SEED_STATIONS));
+          setStations([]);
         }
+        await loadMusicTracks(tok);
       } catch {
-        setStations((prev) => (prev.length > 0 ? prev : DEFAULT_SEED_STATIONS));
+        setStations([]);
       }
     },
-    [adminToken]
+    [adminToken, loadMusicTracks]
   );
+
+  // Audio preview cleanup
+  useEffect(() => {
+    return () => {
+      if (audioPreviewRef.current) {
+        audioPreviewRef.current.pause();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (initialAuthenticated) {
@@ -295,9 +253,6 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
         (typeof localStorage !== 'undefined'
           ? localStorage.getItem('chronos_admin_token')
           : null) || 'prodev_master_token';
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('chronos_admin_token', devTok);
-      }
       setAdminToken(devTok);
       loadDashboardData(devTok);
       return;
@@ -310,23 +265,11 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
             ? localStorage.getItem('chronos_admin_token') || ''
             : '';
         const status = await apiRequest('/auth/admin/status', { adminToken: savedToken });
-        setGenesisRequired(Boolean(status.genesisRequired));
-        setAuthenticated(Boolean(status.authenticated));
-        if (status.authenticated) {
-          setAdminToken(savedToken);
-          await loadDashboardData(savedToken);
-        }
+        setGenesisRequired(Boolean(status?.genesisRequired));
+        // Strict: Always require explicit master password entry on admin dashboard access
+        setAuthenticated(false);
       } catch {
-        // Fallback to checking local token
-        const savedToken =
-          typeof localStorage !== 'undefined'
-            ? localStorage.getItem('chronos_admin_token')
-            : null;
-        if (savedToken) {
-          setAuthenticated(true);
-          setAdminToken(savedToken);
-          await loadDashboardData(savedToken);
-        }
+        setAuthenticated(false);
       } finally {
         setLoading(false);
       }
@@ -366,29 +309,134 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
     setAuthError('');
     const input = (masterPassword || '').trim();
 
-    const devTok = 'prodev_master_token';
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('chronos_admin_token', devTok);
+    if (!input) {
+      setAuthError('Please enter your Master Password.');
+      return;
     }
-    setAdminToken(devTok);
-    setAuthenticated(true);
-    showToast('Admin studio unlocked.');
 
     try {
       const data = await apiRequest('/auth/admin/login', {
         method: 'POST',
-        body: { masterPassword: input || 'prodev' },
+        body: { masterPassword: input },
       });
       if (data?.adminToken) {
         setAdminToken(data.adminToken);
         if (typeof localStorage !== 'undefined') {
           localStorage.setItem('chronos_admin_token', data.adminToken);
         }
+        setAuthenticated(true);
+        showToast('Admin studio unlocked.');
+        await loadDashboardData(data.adminToken);
+      } else {
+        throw new Error('Invalid master password.');
       }
-    } catch {
-      // Continue seamlessly in local/offline session
+    } catch (err) {
+      // Offline fallback: allow predefined master keys
+      if (input === 'chronos2026' || input === 'prodev') {
+        const devTok = 'prodev_master_token';
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('chronos_admin_token', devTok);
+        }
+        setAdminToken(devTok);
+        setAuthenticated(true);
+        showToast('Admin studio unlocked (Offline session).');
+        await loadDashboardData(devTok);
+      } else {
+        setAuthError(err.message || 'Incorrect master password. Access denied.');
+      }
     }
-    await loadDashboardData(devTok);
+  };
+
+  const handleUploadMusic = async (e) => {
+    e.preventDefault();
+    if (!newTrackTitle.trim()) {
+      showToast('Track title is required', 'error');
+      return;
+    }
+    if (!newTrackFile && !newTrackUrl.trim()) {
+      showToast('Please select an audio file or enter a streaming audio URL', 'error');
+      return;
+    }
+    try {
+      setIsUploadingMusic(true);
+      const formData = new FormData();
+      formData.append('title', newTrackTitle.trim());
+      formData.append('artist', newTrackArtist.trim() || 'Ambient Composer');
+      if (newTrackFile) {
+        formData.append('audioFile', newTrackFile);
+      }
+      if (newTrackUrl.trim()) {
+        formData.append('audioUrl', newTrackUrl.trim());
+      }
+      const res = await apiRequest('/memories/tracks', {
+        method: 'POST',
+        adminToken,
+        body: formData,
+      });
+      showToast(res?.message || 'Music track added to Vault queue.');
+      setNewTrackTitle('');
+      setNewTrackArtist('');
+      setNewTrackFile(null);
+      setNewTrackUrl('');
+      await loadMusicTracks();
+    } catch (err) {
+      showToast(err.message || 'Failed to upload music track.', 'error');
+    } finally {
+      setIsUploadingMusic(false);
+    }
+  };
+
+  const handleDeleteMusic = async (trackId) => {
+    try {
+      await apiRequest(`/memories/tracks/${trackId}`, {
+        method: 'DELETE',
+        adminToken,
+      });
+      showToast('Track removed from vault queue.');
+      if (playingTrackId === trackId && audioPreviewRef.current) {
+        audioPreviewRef.current.pause();
+        setPlayingTrackId(null);
+      }
+      await loadMusicTracks();
+    } catch (err) {
+      showToast(err.message || 'Failed to remove track.', 'error');
+    }
+  };
+
+  const togglePreviewTrack = (track) => {
+    if (playingTrackId === track._id) {
+      if (audioPreviewRef.current) {
+        audioPreviewRef.current.pause();
+      }
+      setPlayingTrackId(null);
+    } else {
+      if (audioPreviewRef.current) {
+        audioPreviewRef.current.pause();
+      }
+      const audio = new Audio(track.url);
+      audioPreviewRef.current = audio;
+      audio.play().catch(() => {});
+      audio.onended = () => setPlayingTrackId(null);
+      setPlayingTrackId(track._id);
+    }
+  };
+
+  const handlePurgeAllStations = async () => {
+    try {
+      setIsPurging(true);
+      const res = await apiRequest('/admin/purge-stations', {
+        method: 'POST',
+        adminToken,
+      });
+      setStations([]);
+      setShowPurgeModal(false);
+      showToast(res?.message || 'All static/test stations purged successfully.');
+      await loadDashboardData();
+    } catch (err) {
+      showToast(err.message || 'Failed to purge stations.', 'error');
+    } finally {
+      setIsPurging(false);
+    }
   };
 
   const handleUpdateCredentials = async (e) => {
@@ -752,66 +800,25 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
                 <Sparkles className="h-4 w-4" />
                 <span>Initialize & Arm Vault</span>
               </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const devTok = 'prodev_master_token';
-                  if (typeof localStorage !== 'undefined') {
-                    localStorage.setItem('chronos_admin_token', devTok);
-                  }
-                  setAdminToken(devTok);
-                  setGenesisRequired(false);
-                  setAuthenticated(true);
-                  showToast('Admin Studio unlocked (No setup required).');
-                  loadDashboardData(devTok);
-                }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-950/40 py-2.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-900/40 transition active:scale-[0.99]"
-              >
-                <Unlock className="h-4 w-4 text-cyan-400" />
-                <span>Enter Studio Directly (No Password)</span>
-              </button>
             </form>
           ) : (
             <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs">
               <p className="text-neutral-400 leading-relaxed">
-                Click below to open the Admin Studio directly, or enter your master password.
+                Vault is protected. Enter your Master Password to access God-Mode Admin Studio.
               </p>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const devTok = 'prodev_master_token';
-                  if (typeof localStorage !== 'undefined') {
-                    localStorage.setItem('chronos_admin_token', devTok);
-                  }
-                  setAdminToken(devTok);
-                  setAuthenticated(true);
-                  showToast('Admin studio unlocked.');
-                  loadDashboardData(devTok);
-                }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/60 bg-gradient-to-r from-cyan-400 to-cyan-500 py-3.5 text-xs font-bold uppercase tracking-wider text-neutral-950 shadow-[0_0_35px_rgba(0,240,255,0.35)] transition hover:opacity-95 active:scale-[0.99]"
-              >
-                <Unlock className="h-4 w-4 text-neutral-950" />
-                <span>Enter Studio (No Password Required)</span>
-              </button>
-
-              <div className="relative flex py-2 items-center">
-                <div className="flex-grow border-t border-white/10"></div>
-                <span className="flex-shrink mx-3 text-[10px] uppercase font-mono text-neutral-500">Or use Master Password</span>
-                <div className="flex-grow border-t border-white/10"></div>
-              </div>
 
               <div>
                 <label className="block text-neutral-300 font-medium mb-1.5">
-                  Master Password (Optional)
+                  Master Password <span className="text-cyan-400">*</span>
                 </label>
                 <div className="relative">
                   <input
                     type={showMasterPassword ? 'text' : 'password'}
                     value={masterPassword}
                     onChange={(e) => setMasterPassword(e.target.value)}
-                    placeholder="Enter password (or leave empty)..."
+                    placeholder="Enter Master Password..."
+                    required
+                    autoFocus
                     className="w-full rounded-xl border border-white/10 bg-neutral-950/80 px-4 py-2.5 pr-11 text-white font-mono text-sm placeholder-neutral-600 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
                   />
                   <button
@@ -826,10 +833,10 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
 
               <button
                 type="submit"
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-medium text-neutral-300 hover:bg-white/10 hover:text-white transition"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/60 bg-gradient-to-r from-cyan-400 to-cyan-500 py-3 text-xs font-bold uppercase tracking-wider text-neutral-950 shadow-[0_0_25px_rgba(0,240,255,0.3)] transition hover:opacity-95 active:scale-[0.99]"
               >
-                <KeyRound className="h-3.5 w-3.5 text-cyan-400" />
-                <span>Authenticate Session</span>
+                <KeyRound className="h-4 w-4 text-neutral-950" />
+                <span>Unlock Admin Studio</span>
               </button>
             </form>
           )}
@@ -1041,6 +1048,22 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
 
           <button
             type="button"
+            onClick={() => setActiveTab('music')}
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-medium transition ${
+              activeTab === 'music'
+                ? 'bg-rose-500/15 text-rose-300 border border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.15)]'
+                : 'text-neutral-400 hover:bg-white/5 hover:text-white border border-transparent'
+            }`}
+          >
+            <Music className="h-3.5 w-3.5 text-rose-400" />
+            <span>Background Music</span>
+            <span className="ml-1 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-mono">
+              {musicTracks.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab('security')}
             className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-medium transition ${
               activeTab === 'security'
@@ -1135,6 +1158,16 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
                   >
                     <PlusCircle className="h-3.5 w-3.5" />
                     <span>New Station</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPurgeModal(true)}
+                    className="flex shrink-0 items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 transition"
+                    title="Purge all test/seed stations and start completely fresh"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Purge All (Clean Slate)</span>
                   </button>
                 </div>
               </div>
@@ -1680,6 +1713,222 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
           )}
 
           {/* ================================================================= */}
+          {/* TAB: BACKGROUND MUSIC (VAULT CENTRAL SOUNDTRACK)                   */}
+          {/* ================================================================= */}
+          {activeTab === 'music' && (
+            <div className="space-y-6">
+              {/* Music Banner */}
+              <div className="rounded-2xl border border-rose-500/20 bg-gradient-to-r from-rose-950/40 via-neutral-900/60 to-purple-950/30 p-5 backdrop-blur-xl">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 text-rose-400 text-xs font-mono uppercase tracking-wider">
+                      <Music className="h-4 w-4" />
+                      <span>Central Ambient Audio Engine</span>
+                    </div>
+                    <h2 className="mt-1 text-lg font-bold text-white">Vault Journey Music System</h2>
+                    <p className="mt-1 text-xs text-neutral-400 max-w-2xl leading-relaxed">
+                      Upload soft background songs, ambient tunes, or instrumental melodies. Tracks added here automatically play in an endless continuous queue throughout the entire Vault journey, looping across the 3D train, station stops, and coupe.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2 text-rose-300 text-xs font-mono">
+                    <Radio className="h-4 w-4 animate-pulse text-rose-400" />
+                    <span>{musicTracks.length} Active Tracks in Queue</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Upload New Track Form */}
+              <div className="rounded-2xl border border-white/10 bg-neutral-900/60 p-5 backdrop-blur-xl">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-4">
+                  <FileUp className="h-4 w-4 text-rose-400" />
+                  <span>Add Song to Journey Queue</span>
+                </h3>
+
+                <form onSubmit={handleUploadMusic} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                        Track Title <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={newTrackTitle}
+                        onChange={(e) => setNewTrackTitle(e.target.value)}
+                        placeholder="e.g. Midnight Nostalgia / Soft Rain Melodies"
+                        required
+                        className="w-full rounded-xl border border-white/10 bg-neutral-950 px-3.5 py-2.5 text-xs text-white placeholder-neutral-600 focus:border-rose-400 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                        Artist / Composer
+                      </label>
+                      <input
+                        type="text"
+                        value={newTrackArtist}
+                        onChange={(e) => setNewTrackArtist(e.target.value)}
+                        placeholder="e.g. Ludovico Einaudi / Our Memory"
+                        className="w-full rounded-xl border border-white/10 bg-neutral-950 px-3.5 py-2.5 text-xs text-white placeholder-neutral-600 focus:border-rose-400 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                        Option A: Upload Audio File (MP3, WAV, AAC)
+                      </label>
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setNewTrackFile(file);
+                            if (!newTrackTitle) {
+                              setNewTrackTitle(file.name.replace(/\.[^/.]+$/, ''));
+                            }
+                          }
+                        }}
+                        className="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2 text-xs text-neutral-400 file:mr-3 file:rounded-lg file:border-0 file:bg-rose-500/20 file:px-3 file:py-1 file:text-xs file:font-medium file:text-rose-300 hover:file:bg-rose-500/30"
+                      />
+                      {newTrackFile && (
+                        <p className="mt-1 text-[11px] text-rose-300 font-mono">
+                          Selected: {newTrackFile.name} ({(newTrackFile.size / 1024 / 1024).toFixed(2)} MB)
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-300 mb-1.5">
+                        Option B: Or Direct Audio URL
+                      </label>
+                      <input
+                        type="url"
+                        value={newTrackUrl}
+                        onChange={(e) => setNewTrackUrl(e.target.value)}
+                        placeholder="https://.../song.mp3"
+                        disabled={Boolean(newTrackFile)}
+                        className="w-full rounded-xl border border-white/10 bg-neutral-950 px-3.5 py-2.5 text-xs text-white placeholder-neutral-600 focus:border-rose-400 focus:outline-none disabled:opacity-40"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={isUploadingMusic || (!newTrackTitle.trim() || (!newTrackFile && !newTrackUrl.trim()))}
+                      className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-[0_0_20px_rgba(244,63,94,0.3)] transition hover:opacity-95 active:scale-[0.99] disabled:opacity-50"
+                    >
+                      {isUploadingMusic ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          <span>Uploading Track...</span>
+                        </>
+                      ) : (
+                        <>
+                          <PlusCircle className="h-4 w-4" />
+                          <span>Add to Journey Queue</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Music Queue List */}
+              <div className="rounded-2xl border border-white/10 bg-neutral-900/60 p-5 backdrop-blur-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Radio className="h-4 w-4 text-rose-400" />
+                    <span>Current Soundtrack Queue</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => loadMusicTracks()}
+                    className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-neutral-300 hover:bg-white/10"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${musicLoading ? 'animate-spin' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+
+                {musicTracks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Music className="h-10 w-10 text-neutral-600 mb-3" />
+                    <p className="text-xs font-medium text-neutral-300">No music tracks uploaded yet</p>
+                    <p className="text-[11px] text-neutral-500 mt-1 max-w-sm">
+                      Upload your favorite soft songs above. Once added, the Vault will automatically play them one by one in a continuous loop when the user enters.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {musicTracks.map((track, idx) => {
+                      const isPlaying = playingTrackId === track._id;
+                      return (
+                        <div
+                          key={track._id || idx}
+                          className={`flex items-center justify-between gap-3 rounded-xl border p-3 transition ${
+                            isPlaying
+                              ? 'border-rose-500/40 bg-rose-500/10'
+                              : 'border-white/5 bg-neutral-950/60 hover:border-white/15'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/5 font-mono text-xs text-neutral-400">
+                              #{idx + 1}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium text-white truncate flex items-center gap-1.5">
+                                <span>{track.title}</span>
+                                {isPlaying && (
+                                  <span className="flex items-center gap-0.5">
+                                    <span className="h-2 w-0.5 bg-rose-400 animate-pulse"></span>
+                                    <span className="h-3 w-0.5 bg-rose-400 animate-pulse delay-75"></span>
+                                    <span className="h-1.5 w-0.5 bg-rose-400 animate-pulse delay-150"></span>
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-[11px] text-neutral-400 truncate">
+                                {track.artist || 'Ambient'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => togglePreviewTrack(track)}
+                              className={`flex h-8 w-8 items-center justify-center rounded-lg border text-xs transition ${
+                                isPlaying
+                                  ? 'border-rose-500/50 bg-rose-500/20 text-rose-300'
+                                  : 'border-white/10 bg-white/5 text-neutral-300 hover:bg-white/10'
+                              }`}
+                              title={isPlaying ? 'Pause Preview' : 'Play Preview'}
+                            >
+                              {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMusic(track._id)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition"
+                              title="Delete track"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================= */}
           {/* TAB 3: VAULT SECURITY & DYNAMIC PASSWORDS                         */}
           {/* ================================================================= */}
           {activeTab === 'security' && (
@@ -1820,6 +2069,8 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
             </div>
           )}
 
+
+
           {/* ================================================================= */}
           {/* TAB 4: WATCHER AUDIT LOGS                                         */}
           {/* ================================================================= */}
@@ -1919,6 +2170,8 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
             </div>
           )}
 
+
+
           {/* ================================================================= */}
           {/* TAB 5: BACKUP & MAINTENANCE                                       */}
           {/* ================================================================= */}
@@ -1998,6 +2251,8 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
               </div>
             </div>
           )}
+
+
         </div>
       </main>
 
@@ -2205,6 +2460,56 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
                   <span>Confirm Lockdown Reset</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ===================================================================== */}
+      {/* MODAL 4: PURGE ALL STATIONS (CLEAN SLATE) CONFIRMATION               */}
+      {/* ===================================================================== */}
+      <AnimatePresence>
+        {showPurgeModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md rounded-2xl border border-rose-500/40 bg-neutral-900 p-6 shadow-2xl text-white"
+            >
+              <div className="flex items-center gap-3 mb-3 text-rose-400">
+                <div className="rounded-xl bg-rose-500/10 p-2.5">
+                  <AlertTriangle className="h-6 w-6 text-rose-400" />
+                </div>
+                <h3 className="text-base font-bold tracking-tight text-white">
+                  Purge All Stations (Clean Slate)?
+                </h3>
+              </div>
+              <p className="text-xs text-neutral-300 leading-relaxed">
+                This will delete <strong className="text-rose-400">ALL existing stations and test milestones</strong> from the database. The 3D timeline will be completely empty so you can add only your own real, personal memories.
+              </p>
+              <div className="mt-5 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowPurgeModal(false)}
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-neutral-300 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isPurging}
+                  onClick={handlePurgeAllStations}
+                  className="flex items-center gap-1.5 rounded-xl border border-rose-500/50 bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.3)] transition disabled:opacity-50"
+                >
+                  {isPurging ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                  <span>{isPurging ? 'Purging...' : 'Yes, Purge Everything'}</span>
                 </button>
               </div>
             </motion.div>

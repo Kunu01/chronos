@@ -6,6 +6,9 @@ import {
   appendStationAsset,
   deleteMemoryStation,
   recordActivity,
+  getPlaylistTracks,
+  addPlaylistTrack,
+  deletePlaylistTrack,
 } from '../services/dataStore.js';
 import { uploadMediaBuffer } from '../services/cloudinaryService.js';
 import { sendSuccess, sendError } from '../middlewares/errorHandler.js';
@@ -237,6 +240,83 @@ export const exportStationsBackup = async (_req, res, next) => {
       count: stations.length,
       stations,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /api/v1/memories/tracks
+ * Returns background music playlist for the vault.
+ */
+export const fetchPlaylist = async (_req, res, next) => {
+  try {
+    const tracks = await getPlaylistTracks();
+    return sendSuccess(res, tracks);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /api/v1/memories/tracks
+ * Uploads an audio track to Cloudinary or saves an audio streaming URL.
+ */
+export const uploadMusicTrack = async (req, res, next) => {
+  try {
+    const { title, artist, audioUrl } = req.body || {};
+    if (!title) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Song title is required.');
+    }
+
+    let finalUrl = audioUrl;
+    let publicId = null;
+
+    if (req.file) {
+      const uploaded = await uploadMediaBuffer(req.file, { folder: 'chronos/music' });
+      finalUrl = uploaded.url;
+      publicId = uploaded.publicId;
+    }
+
+    if (!finalUrl) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Audio file or audio URL is required.');
+    }
+
+    const track = await addPlaylistTrack({
+      title,
+      artist: artist || 'Ambient Soundscape',
+      url: finalUrl,
+      publicId,
+    });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to('chronos_vault').emit('music:updated', track);
+    }
+
+    return sendSuccess(res, track, 201);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * DELETE /api/v1/memories/tracks/:id
+ */
+export const removeMusicTrack = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const ok = await deletePlaylistTrack(id);
+    if (!ok) {
+      return sendError(res, 404, 'NOT_FOUND', 'Track not found.');
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to('chronos_vault').emit('music:deleted', { id });
+    }
+
+    return sendSuccess(res, { message: 'Track removed from vault playlist.', id });
   } catch (err) {
     next(err);
   }

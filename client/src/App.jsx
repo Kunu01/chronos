@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
+import { MusicProvider } from './contexts/MusicContext';
 import CraveBookHome from './components/decoy/CraveBookHome';
 
 // Strict Code-Splitting per TSD Section 4:
@@ -102,29 +103,31 @@ const App = () => {
       <ThemeProvider>
         <AuthProvider>
           <SocketProvider>
-            <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<RootGate />} />
-                {/* Restrict /admin - redirect to decoy root */}
-                <Route path="/admin" element={<Navigate to="/" replace />} />
-                {/* Admin Panel accessed via /prodev */}
-                <Route
-                  path="/prodev"
-                  element={
-                    <Suspense
-                      fallback={
-                        <div className="flex h-[100dvh] w-full items-center justify-center bg-[#121212] font-mono text-xs uppercase text-[#00F0FF]">
-                          [LOADING STUDIO...]
-                        </div>
-                      }
-                    >
-                      <AdminDashboard />
-                    </Suspense>
-                  }
-                />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </BrowserRouter>
+            <MusicProvider>
+              <BrowserRouter>
+                <Routes>
+                  <Route path="/" element={<RootGate />} />
+                  {/* Restrict /admin - redirect to decoy root */}
+                  <Route path="/admin" element={<Navigate to="/" replace />} />
+                  {/* Admin Panel accessed via /prodev */}
+                  <Route
+                    path="/prodev"
+                    element={
+                      <Suspense
+                        fallback={
+                          <div className="flex h-[100dvh] w-full items-center justify-center bg-[#121212] font-mono text-xs uppercase text-[#00F0FF]">
+                            [LOADING STUDIO...]
+                          </div>
+                        }
+                      >
+                        <AdminDashboard />
+                      </Suspense>
+                    }
+                  />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </BrowserRouter>
+            </MusicProvider>
           </SocketProvider>
         </AuthProvider>
       </ThemeProvider>
