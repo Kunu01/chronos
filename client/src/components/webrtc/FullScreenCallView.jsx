@@ -94,15 +94,18 @@ const FullScreenCallView = ({
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.play().catch(() => {});
     }
     if (remoteVideoBgRef.current && remoteStream) {
       remoteVideoBgRef.current.srcObject = remoteStream;
+      remoteVideoBgRef.current.play().catch(() => {});
     }
   }, [remoteStream]);
 
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.play().catch(() => {});
     }
   }, [localStream]);
 

@@ -245,14 +245,23 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
     };
   }, []);
 
+  const hasCheckedStatusRef = useRef(false);
+
   useEffect(() => {
+    if (hasCheckedStatusRef.current) return;
+    hasCheckedStatusRef.current = true;
+
     if (initialAuthenticated) {
       setAuthenticated(true);
       setLoading(false);
       const devTok =
+        (typeof sessionStorage !== 'undefined'
+          ? sessionStorage.getItem('chronos_admin_token')
+          : null) ||
         (typeof localStorage !== 'undefined'
           ? localStorage.getItem('chronos_admin_token')
-          : null) || 'prodev_master_token';
+          : null) ||
+        'prodev_master_token';
       setAdminToken(devTok);
       loadDashboardData(devTok);
       return;
@@ -261,13 +270,24 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
     const checkStatus = async () => {
       try {
         const savedToken =
-          typeof localStorage !== 'undefined'
-            ? localStorage.getItem('chronos_admin_token') || ''
-            : '';
+          (typeof sessionStorage !== 'undefined'
+            ? sessionStorage.getItem('chronos_admin_token')
+            : '') ||
+          (typeof localStorage !== 'undefined'
+            ? localStorage.getItem('chronos_admin_token')
+            : '') ||
+          '';
+
         const status = await apiRequest('/auth/admin/status', { adminToken: savedToken });
         setGenesisRequired(Boolean(status?.genesisRequired));
-        // Strict: Always require explicit master password entry on admin dashboard access
-        setAuthenticated(false);
+
+        if (status?.authenticated && savedToken) {
+          setAuthenticated(true);
+          setAdminToken(savedToken);
+          await loadDashboardData(savedToken);
+        } else {
+          setAuthenticated(false);
+        }
       } catch {
         setAuthenticated(false);
       } finally {
@@ -275,7 +295,7 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
       }
     };
     checkStatus();
-  }, [loadDashboardData, initialAuthenticated]);
+  }, [initialAuthenticated, loadDashboardData]);
 
   const handleGenesisSubmit = async (e) => {
     e.preventDefault();
@@ -291,6 +311,9 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
         },
       });
       const tok = data.adminToken || 'prodev_master_token';
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('chronos_admin_token', tok);
+      }
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem('chronos_admin_token', tok);
       }
@@ -321,6 +344,9 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
       });
       if (data?.adminToken) {
         setAdminToken(data.adminToken);
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('chronos_admin_token', data.adminToken);
+        }
         if (typeof localStorage !== 'undefined') {
           localStorage.setItem('chronos_admin_token', data.adminToken);
         }
@@ -334,6 +360,9 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
       // Offline fallback: allow predefined master keys
       if (input === 'chronos2026' || input === 'prodev') {
         const devTok = 'prodev_master_token';
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('chronos_admin_token', devTok);
+        }
         if (typeof localStorage !== 'undefined') {
           localStorage.setItem('chronos_admin_token', devTok);
         }
@@ -937,9 +966,13 @@ const AdminDashboard = ({ onExit, initialAuthenticated = false }) => {
                 if (typeof localStorage !== 'undefined') {
                   localStorage.removeItem('chronos_admin_token');
                 }
-                await apiRequest('/auth/admin/logout', { method: 'POST', adminToken });
+                if (typeof sessionStorage !== 'undefined') {
+                  sessionStorage.removeItem('chronos_admin_token');
+                }
+                await apiRequest('/auth/admin/logout', { method: 'POST', adminToken }).catch(() => {});
                 setAdminToken('');
                 setAuthenticated(false);
+                setMasterPassword('');
                 showToast('Logged out of Admin Studio.');
               }}
               className="flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-rose-300 transition hover:bg-rose-500/20 hover:text-white"

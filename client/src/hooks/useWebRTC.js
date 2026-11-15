@@ -46,8 +46,15 @@ export const useWebRTC = () => {
   const cinemaPcRef = useRef(null);
   const localStreamRef = useRef(null);
   const castTracksRef = useRef([]);
+  const iceCandidateQueueRef = useRef([]);
+  const pendingOfferRef = useRef(null);
+  const callAnsweredRef = useRef(false);
 
   const stopAllMediaNow = useCallback(() => {
+    pendingOfferRef.current = null;
+    iceCandidateQueueRef.current = [];
+    callAnsweredRef.current = false;
+
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());
       localStreamRef.current = null;
@@ -107,8 +114,15 @@ export const useWebRTC = () => {
     };
 
     pc.ontrack = (event) => {
-      const [stream] = event.streams;
-      if (stream) setRemoteStream(stream);
+      if (event.streams && event.streams[0]) {
+        setRemoteStream(event.streams[0]);
+      } else if (event.track) {
+        setRemoteStream((prev) => {
+          const s = prev ? new MediaStream(prev.getTracks()) : new MediaStream();
+          s.addTrack(event.track);
+          return s;
+        });
+      }
     };
 
     pc.oniceconnectionstatechange = () => {
@@ -168,10 +182,24 @@ export const useWebRTC = () => {
     return cpc;
   }, [socket]);
 
+  const drainIceCandidates = useCallback(async (pc) => {
+    while (iceCandidateQueueRef.current.length > 0) {
+      const cand = iceCandidateQueueRef.current.shift();
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(cand));
+      } catch (err) {
+        console.warn('ICE drain error:', err);
+      }
+    }
+  }, []);
+
   const startCall = useCallback(
     async ({ video = true } = {}) => {
       try {
         setIceStatus('connecting');
+        callAnsweredRef.current = false;
+        pendingOfferRef.current = null;
+
         const stream = await navigator.mediaDevices.getUserMedia({
           video: video
             ? {
@@ -199,7 +227,8 @@ export const useWebRTC = () => {
           socket.emit('webrtc:signal', { type: 'offer', sdp: pc.localDescription });
         }
         setIceStatus('connected');
-      } catch {
+      } catch (err) {
+        console.error('startCall failed:', err);
         setCallActive(true);
         setCamOff(!video);
         setIceStatus('connected');
@@ -208,43 +237,127 @@ export const useWebRTC = () => {
     [ensurePrimaryPeerConnection, facingMode, socket]
   );
 
-  const flipCamera = useCallback(async () => {
-    const nextFacing = facingMode === 'user' ? 'environment' : 'user';
-    setFacingMode(nextFacing);
+  const acceptCall = useCallback(
+    async ({ video = true } = {}) => {
+      try {
+        setIceStatus('connecting');
+        callAnsweredRef.current = true;
 
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: video
+            ? {
+                facingMode: { ideal: facingMode },
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+              }
+            : false,
+          audio: true,
+        });
+
+        localStreamRef.current = stream;
+        setLocalStream(stream);
+        setCamOff(!video);
+        setMicMuted(false);
+        setCallActive(true);
+
+        const pc = ensurePrimaryPeerConnection();
+        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+        if (pendingOfferRef.current) {
+          await pc.setRemoteDescription(new RTCSessionDescription(pendingOfferRef.current));
+          pendingOfferRef.current = null;
+          await drainIceCandidates(pc);
+
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+
+          if (socket) {
+            socket.emit('webrtc:signal', { type: 'answer', sdp: pc.localDescription });
+          }
+        }
+        setIceStatus('connected');
+      } catch (err) {
+        console.error('acceptCall failed:', err);
+        setCallActive(true);
+      }
+    },
+    [ensurePrimaryPeerConnection, facingMode, socket, drainIceCandidates]
+  );
+
+  const flipCamera = useCallback(async () => {
     if (!localStreamRef.current) return;
+    const currentVideoTrack = localStreamRef.current.getVideoTracks()[0];
+    const nextFacing = facingMode === 'user' ? 'environment' : 'user';
+
+    // Critical for mobile: stop existing camera track first to release hardware lock
+    if (currentVideoTrack) {
+      currentVideoTrack.stop();
+      localStreamRef.current.removeTrack(currentVideoTrack);
+    }
+
     try {
-      const nextCamStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: nextFacing },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
+      let nextCamStream;
+      try {
+        nextCamStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { exact: nextFacing },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      } catch {
+        nextCamStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: nextFacing,
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      }
+
       const newVideoTrack = nextCamStream.getVideoTracks()[0];
       if (!newVideoTrack) return;
 
-      const oldTracks = localStreamRef.current.getVideoTracks();
-      oldTracks.forEach((t) => {
-        localStreamRef.current.removeTrack(t);
-        t.stop();
-      });
       localStreamRef.current.addTrack(newVideoTrack);
 
       if (pcRef.current) {
-        const sender = pcRef.current
-          .getSenders()
-          .find((s) => s.track && s.track.kind === 'video');
-        if (sender) {
-          await sender.replaceTrack(newVideoTrack);
+        const senders = pcRef.current.getSenders();
+        const videoSender = senders.find(
+          (s) => (s.track && s.track.kind === 'video') || (s.track === null)
+        );
+        if (videoSender) {
+          await videoSender.replaceTrack(newVideoTrack);
         }
       }
 
+      setFacingMode(nextFacing);
       setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
       setCamOff(false);
-    } catch {
-      // Fallback if single-camera device ignores exact facingMode
+    } catch (err) {
+      console.warn('flipCamera failed, restoring camera:', err);
+      try {
+        const restoreStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: false,
+        });
+        const restoredTrack = restoreStream.getVideoTracks()[0];
+        if (restoredTrack) {
+          localStreamRef.current.addTrack(restoredTrack);
+          if (pcRef.current) {
+            const senders = pcRef.current.getSenders();
+            const videoSender = senders.find(
+              (s) => (s.track && s.track.kind === 'video') || (s.track === null)
+            );
+            if (videoSender) await videoSender.replaceTrack(restoredTrack);
+          }
+          setFacingMode('user');
+          setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+        }
+      } catch {
+        // Continue
+      }
     }
   }, [facingMode]);
 
@@ -255,18 +368,30 @@ export const useWebRTC = () => {
     const handlePrimarySignal = async (payload) => {
       try {
         const pc = ensurePrimaryPeerConnection();
+
         if (payload.type === 'offer') {
-          await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          socket.emit('webrtc:signal', { type: 'answer', sdp: pc.localDescription });
+          if (callAnsweredRef.current && localStreamRef.current) {
+            await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            await drainIceCandidates(pc);
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.emit('webrtc:signal', { type: 'answer', sdp: pc.localDescription });
+          } else {
+            // Buffer offer until receiver taps Accept
+            pendingOfferRef.current = payload.sdp;
+          }
         } else if (payload.type === 'answer') {
           await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+          await drainIceCandidates(pc);
         } else if (payload.type === 'ice-candidate' && payload.candidate) {
-          await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          } else {
+            iceCandidateQueueRef.current.push(payload.candidate);
+          }
         }
-      } catch {
-        // Ignore transient primary signaling errors
+      } catch (err) {
+        console.warn('Primary WebRTC signal error:', err);
       }
     };
 
@@ -299,7 +424,7 @@ export const useWebRTC = () => {
       socket.off('webrtc:signal', handlePrimarySignal);
       socket.off('webrtc:cinema_signal', handleCinemaSignal);
     };
-  }, [socket, ensurePrimaryPeerConnection, ensureCinemaPeerConnection]);
+  }, [socket, ensurePrimaryPeerConnection, ensureCinemaPeerConnection, drainIceCandidates]);
 
   const toggleMic = useCallback(() => {
     if (localStreamRef.current) {
@@ -393,6 +518,7 @@ export const useWebRTC = () => {
     cinemaFallbackTriggered,
     setCinemaFallbackTriggered,
     startCall,
+    acceptCall,
     flipCamera,
     stopAllMediaNow,
     toggleMic,

@@ -243,7 +243,7 @@ const VaultLayout = () => {
                   const callType = incomingCall.callType || 'video';
                   respondToIncomingCall(true, callType);
                   handleChangeTab('call');
-                  await webrtc.startCall({ video: callType === 'video' });
+                  await webrtc.acceptCall({ video: callType === 'video' });
                 }}
                 className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-900/40 hover:bg-emerald-400 active:scale-90 transition-all"
                 title="Accept"
